@@ -95,13 +95,11 @@ def render():
         key="hl_uploader",
     )
 
-    time_val = st.time_input("Stocktake time", value=datetime.now().replace(second=0, microsecond=0).time(), key="hl_time")
-
     if not uploaded_files:
         st.info("Upload one or more .xlsx / .csv files to continue.")
         return
 
-    dt = datetime.combine(datetime.now().date(), time_val)
+    dt = datetime.now()
     all_rows: list[tuple] = []
     file_errors: list[str] = []
 
