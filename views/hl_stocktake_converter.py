@@ -95,18 +95,13 @@ def render():
         key="hl_uploader",
     )
 
-    st.subheader("Stocktake date and time")
-    col1, col2 = st.columns(2)
-    with col1:
-        date_val = st.date_input("Date", value=datetime.now().date(), key="hl_date")
-    with col2:
-        time_val = st.time_input("Time", value=datetime.now().replace(second=0, microsecond=0).time(), key="hl_time")
+    time_val = st.time_input("Stocktake time", value=datetime.now().replace(second=0, microsecond=0).time(), key="hl_time")
 
     if not uploaded_files:
         st.info("Upload one or more .xlsx / .csv files to continue.")
         return
 
-    dt = datetime.combine(date_val, time_val)
+    dt = datetime.combine(datetime.now().date(), time_val)
     all_rows: list[tuple] = []
     file_errors: list[str] = []
 
