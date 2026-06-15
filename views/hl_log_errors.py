@@ -1,6 +1,7 @@
 import csv
 import re
 from io import BytesIO, StringIO
+from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -10,6 +11,13 @@ _ERROR_RE = re.compile(
     r"ERROR:\s*Barcode\s+(\S+)\s+not found!\s+Quantity\s*=\s*([\d.]+)",
     re.IGNORECASE,
 )
+
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+VENUES = {
+    "RS — Red Sands": _DATA_DIR / "catalogue_RS.csv",
+    "NH — Newman Hotel": _DATA_DIR / "catalogue_NH.csv",
+}
 
 
 def _parse_log(text: str) -> list[tuple[str, float]]:
@@ -23,11 +31,11 @@ def _parse_log(text: str) -> list[tuple[str, float]]:
     return rows
 
 
-def _load_catalogue(file_bytes: bytes) -> dict[str, str]:
+def _load_catalogue(path: Path) -> dict[str, str]:
     """Return {normalised_barcode: product_name}.
     Strips leading zeros so '029147100244' and '29147100244' resolve to the same key.
     """
-    text = file_bytes.decode("utf-8", errors="replace")
+    text = path.read_text(encoding="utf-8", errors="replace")
     reader = csv.DictReader(StringIO(text))
     headers = [h.strip().lower() for h in (reader.fieldnames or [])]
 
@@ -99,6 +107,9 @@ def render():
         "that returned 'not found' errors, and download them as an Excel report."
     )
 
+    venue = st.radio("Venue", list(VENUES.keys()), horizontal=True, key="hl_venue")
+    catalogue = _load_catalogue(VENUES[venue])
+
     uploaded_files = st.file_uploader(
         "Upload log files (.txt or .log)",
         type=["txt", "log"],
@@ -106,26 +117,9 @@ def render():
         key="hl_log_uploader",
     )
 
-    catalogue_file = st.file_uploader(
-        "Upload product catalogue (optional — CSV with 'code' and 'name' columns)",
-        type=["csv"],
-        key="hl_catalogue_uploader",
-    )
-
     if not uploaded_files:
         st.info("Upload one or more log files to continue.")
         return
-
-    catalogue: dict[str, str] = {}
-    if catalogue_file:
-        catalogue = _load_catalogue(catalogue_file.read())
-        if catalogue:
-            st.success(f"Catalogue loaded — {len(catalogue)} products.")
-        else:
-            st.warning(
-                "Could not parse the catalogue CSV. "
-                "Make sure it has 'code' and 'name' columns."
-            )
 
     aggregated: dict[str, dict] = {}
     file_errors: list[str] = []
@@ -150,14 +144,11 @@ def render():
         st.warning("No 'not found' errors detected in the uploaded files.")
         return
 
-    matched = sum(1 for b in aggregated if _lookup_name(b, catalogue)) if catalogue else 0
-    msg = (
+    matched = sum(1 for b in aggregated if _lookup_name(b, catalogue))
+    st.success(
         f"Found **{total_raw}** error lines across {len(uploaded_files)} file(s) — "
-        f"**{len(aggregated)}** unique barcodes."
+        f"**{len(aggregated)}** unique barcodes. **{matched}** matched in {venue} catalogue."
     )
-    if catalogue:
-        msg += f" **{matched}** matched in catalogue."
-    st.success(msg)
 
     xlsx_bytes = _build_xlsx(aggregated, catalogue)
 
@@ -167,4 +158,3 @@ def render():
         file_name="hl_not_found_barcodes.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-
